@@ -111,7 +111,24 @@
           return alert("Nope. That's a bad idea.");
         }
 
+        if (action.type === ADD_TODO) {
+          alert("Don't forget to " + action.todo.name + "!");
+        }
+
+        if (action.type === ADD_GOAL) {
+          alert("That's a great goal!");
+        }
+
         return next(action);
+      };
+
+      const logger = (store) => (next) => (action) => {
+        console.group(action.type);
+        console.log("The action : ", action);
+        const result = next(action);
+        console.log("The new state: ", store.getState());
+        console.groupEnd();
+        return result;
       };
 
       const store = Redux.createStore(
@@ -119,7 +136,7 @@
           todos,
           goals,
         }),
-        Redux.applyMiddleware(checker)
+        Redux.applyMiddleware(checker, logger)
       );
 
       store.subscribe(() => {

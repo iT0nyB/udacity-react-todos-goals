@@ -6,6 +6,7 @@
     <script src="https://unpkg.com/react@17.0.2/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@17.0.2/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone@7.17.6/babel.min.js"></script>
+    <script src="https://tylermcginnis.com/goals-todos-api/index.js"></script>
   </head>
 
   <body>
@@ -25,6 +26,7 @@
       const TOGGLE_TODO = "TOGGLE_TODO";
       const ADD_GOAL = "ADD_GOAL";
       const REMOVE_GOAL = "REMOVE_GOAL";
+      const RECEIVE_DATA = "RECEIVE_DATA";
 
       const addTodoAction = (todo) => {
         return {
@@ -61,6 +63,14 @@
         };
       };
 
+      const receiveDataAction = (todos, goals) => {
+        return {
+          type: RECEIVE_DATA,
+          goals,
+          todos,
+        };
+      };
+
       const todos = (state = [], action) => {
         switch (action.type) {
           case ADD_TODO:
@@ -73,6 +83,8 @@
                 ? todo
                 : Object.assign({}, todo, { complete: !todo.complete })
             );
+          case RECEIVE_DATA:
+            return action.todos;
           default:
             return state;
         }
@@ -84,6 +96,17 @@
             return state.concat([action.goal]);
           case REMOVE_GOAL:
             return state.filter((goal) => goal.id !== action.id);
+          case RECEIVE_DATA:
+            return action.goals;
+          default:
+            return state;
+        }
+      };
+
+      const loading = (state = true, action) => {
+        switch (action.type) {
+          case RECEIVE_DATA:
+            return false;
           default:
             return state;
         }
@@ -120,6 +143,7 @@
         Redux.combineReducers({
           todos,
           goals,
+          loading,
         }),
         Redux.applyMiddleware(checker, logger)
       );
@@ -153,23 +177,33 @@
         const addItem = (e) => {
           e.preventDefault();
           const name = inputRef.current.value;
-          inputRef.current.value = "";
 
-          store.dispatch(
-            addTodoAction({
-              name,
-              complete: false,
-              id: generateID(),
+          return API.saveTodo(name)
+            .then((todo) => {
+              store.dispatch(addTodoAction(todo));
+              inputRef.current.value = "";
             })
-          );
+            .catch(() => {
+              alert("There was an error. Try again");
+            });
         };
 
-        const toggleItem = (todo) => {
-          store.dispatch(toggleTodoAction(todo));
+        const toggleItem = (id) => {
+          store.dispatch(toggleTodoAction(id));
+
+          return API.saveTodoToggle(id).catch(() => {
+            store.dispatch(toggleTodoAction(id));
+            alert("An error occured. Try again");
+          });
         };
 
         const removeItem = (todo) => {
           store.dispatch(removeTodoAction(todo.id));
+
+          return API.deleteTodo(todo.id).catch(() => {
+            store.dispatch(addTodoAction(todo));
+            alert("An error occured. Try again");
+          });
         };
 
         return (
@@ -188,18 +222,23 @@
         const addItem = (e) => {
           e.preventDefault();
           const name = inputRef.current.value;
-          inputRef.current.value = "";
 
-          store.dispatch(
-            addGoalAction({
-              name,
-              id: generateID(),
+          return API.saveGoal(name)
+            .then((goal) => {
+              store.dispatch(addGoalAction(goal));
+              inputRef.current.value = "";
             })
-          );
+            .catch(() => {
+              alert("There is an error. Try again");
+            });
         };
 
         const removeItem = (goal) => {
           store.dispatch(removeGoalAction(goal.id));
+          return API.deleteGoal(goal.id).catch(() => {
+            store.dispatch(addGoalAction(goal));
+            alert("An error occured. Try again");
+          });
         };
 
         return (
@@ -216,10 +255,20 @@
         const [value, setValue] = React.useState(0);
 
         React.useEffect(() => {
+          Promise.all([API.fetchTodos(), API.fetchGoals()]).then(
+            ([todos, goals]) => {
+              store.dispatch(receiveDataAction(todos, goals));
+            }
+          );
+
           store.subscribe(() => setValue((value) => value + 1));
         }, []);
 
-        const { todos, goals } = store.getState();
+        const { todos, goals, loading } = store.getState();
+
+        if (loading === true) {
+          return <h3>Loading</h3>;
+        }
 
         return (
           <div>

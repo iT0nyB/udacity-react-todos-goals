@@ -8,6 +8,7 @@
     <script src="https://unpkg.com/@babel/standalone@7.17.6/babel.min.js"></script>
     <script src="https://tylermcginnis.com/goals-todos-api/index.js"></script>
     <script src="https://unpkg.com/redux-thunk@2.2.0/dist/redux-thunk.min.js"></script>
+    <script src="https://unpkg.com/react-redux@7.2.6/dist/react-redux.min.js"></script>
   </head>
 
   <body>
@@ -297,18 +298,12 @@
         );
       };
 
-      const App = ({ store }) => {
-        const [value, setValue] = React.useState(0);
-
+      const App = (props) => {
         React.useEffect(() => {
-          store.dispatch(handleInitialData());
-
-          store.subscribe(() => setValue((value) => value + 1));
+          props.dispatch(handleInitialData());
         }, []);
 
-        const { loading } = store.getState();
-
-        if (loading === true) {
+        if (props.loading === true) {
           return <h3>Loading</h3>;
         }
 
@@ -320,39 +315,57 @@
         );
       };
 
-      const ConnectedTodos = () => {
-        return (
-          <Context.Consumer>
-            {(store) => {
-              const { todos } = store.getState();
-              return <Todos todos={todos} dispatch={store.dispatch} />;
-            }}
-          </Context.Consumer>
-        );
-      };
+      const ConnectedTodos = connect((state) => ({
+        todos: state.todos,
+      }))(Todos);
 
-      const ConnectedGoals = () => {
-        return (
-          <Context.Consumer>
-            {(store) => {
-              const { goals } = store.getState();
-              return <Goals goals={goals} dispatch={store.dispatch} />;
-            }}
-          </Context.Consumer>
-        );
-      };
+      const ConnectedGoals = connect((state) => ({
+        goals: state.goals,
+      }))(Goals);
 
-      const ConnectedApp = () => {
-        return (
-          <Context.Consumer>
-            {(store) => {
-              return <App store={store} />;
-            }}
-          </Context.Consumer>
-        );
-      };
-
+      const ConnectedApp = connect((state) => ({ loading: state.loading }))(
+        App
+      );
       const Context = React.createContext();
+
+      function connect(mapStateToProps) {
+        return (Component) => {
+          const Receiver = (props) => {
+            const [value, setValue] = React.useState(0);
+
+            React.useEffect(() => {
+              let unmounted = false;
+              const { subscribe } = props.store;
+
+              const unsubscribe = subscribe(() => {
+                setValue((value) => value + 1);
+              });
+
+              return () => {
+                unsubscribe();
+                unmounted = true;
+              };
+            }, []);
+
+            const { dispatch, getState } = props.store;
+            const state = getState();
+            const stateNeeded = mapStateToProps(state);
+
+            return <Component {...stateNeeded} dispatch={dispatch} />;
+          };
+
+          const ConnectedComponent = () => {
+            return (
+              <Context.Consumer>
+                {(store) => <Receiver store={store} />}
+              </Context.Consumer>
+            );
+          };
+
+          return ConnectedComponent;
+        };
+      }
+
       const Provider = (props) => {
         return (
           <Context.Provider value={props.store}>
